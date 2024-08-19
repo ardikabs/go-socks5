@@ -20,11 +20,11 @@ func main() {
 		Logger:             log,
 	})
 	if err != nil {
-		log.Error(err, "failed to create server")
+		log.Error(err, "failed to initiate server")
 		os.Exit(1)
 	}
 
-	go srv.ListenAndServe("tcp", "localhost:8080")
+	go srv.ListenAndServe("localhost:8080")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)

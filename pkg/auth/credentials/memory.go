@@ -4,22 +4,13 @@ import (
 	"fmt"
 )
 
-type InMemoryStore struct {
-	stash map[string]string
-}
+type MemoryStore map[string]string
 
-func NewInMemoryStore(data map[string]string) (*InMemoryStore, error) {
-	if data == nil {
-		return nil, fmt.Errorf("data cannot be nil")
+func (m MemoryStore) Validate(p Parameters) error {
+	passwd, ok := m[p.Username]
+	if !ok || passwd != p.Password {
+		return fmt.Errorf("%w, either username or password is incorrect", ErrInvalidCredentials)
 	}
 
-	return &InMemoryStore{stash: data}, nil
-}
-
-func (m *InMemoryStore) Validate(p Parameters) error {
-	if passwd, ok := m.stash[p.Username]; ok && passwd != p.Password {
-		return ErrInvalidCredentials
-	}
-
-	return fmt.Errorf("username %s not found", p.Username)
+	return nil
 }

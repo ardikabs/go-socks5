@@ -2,6 +2,7 @@ package socks5
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
@@ -41,12 +42,7 @@ func New(cfg ServerConfig) (*Server, error) {
 
 			cfg.CredentialStore = cs
 		} else if cfg.UserPassMaps != nil {
-			cs, err := credentials.NewInMemoryStore(cfg.UserPassMaps)
-			if err != nil {
-				return nil, err
-			}
-
-			cfg.CredentialStore = cs
+			cfg.CredentialStore = credentials.MemoryStore(cfg.UserPassMaps)
 		}
 
 	}
@@ -62,10 +58,10 @@ func (s *Server) Shutdown() {
 	}
 }
 
-func (s *Server) ListenAndServe(network, address string) error {
+func (s *Server) ListenAndServe(address string) error {
 	s.cfg.Logger.Info("starting SOCKS5 proxy server", "address", address)
 
-	listener, err := net.Listen(network, address)
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
@@ -104,35 +100,55 @@ func (s *Server) handleConn(baseCtx context.Context, conn net.Conn) {
 		return
 	}
 
+	// initial check for SOCKS version
 	if version[0] != types.VERSION {
 		log.Info("unsupported SOCKS version, closing ...", "phase", "inititation", "version", version[0])
 		return
 	}
 
-	authHandler, err := auth.New(conn, s.cfg.EnabledAuthMethods, s.cfg.CredentialStore)
+	// parsing SOCKS authentication
+	authn, err := auth.Parse(conn, s.cfg.EnabledAuthMethods, s.cfg.CredentialStore)
 	if err != nil {
 		log.Error(err, "failed to parse SOCKS authentication methods", "phase", "method selection")
 		return
 	}
 
-	authCtx, err := authHandler.Handle(ctx)
+	// authenticate SOCKS client
+	authCtx, err := authn.Authenticate(ctx, conn, conn)
 	if err != nil {
 		log.Error(err, "failed to authenticate SOCKS client", "phase", "authentication")
 		return
 	}
 
-	// start processing client's request
-	req, err := request.New(conn, SendReply, request.WithDialer(s.cfg.Dialer))
+	// parsing SOCKS request
+	req, err := request.Parse(conn, SendReply, request.WithDialer(s.cfg.Dialer))
 	if err != nil {
-		log.Error(err, "failed to construct SOCKS request", "phase", "request parsing")
+		log = log.WithValues("phase", "request parsing")
+
+		var repErr error
+		switch errors.Unwrap(err) {
+		case types.ErrUnsupportedCommand:
+			repErr = SendReply(conn, types.ReplyCommandNotSupported, nil)
+		case types.ErrUnsupportedAddressType:
+			repErr = SendReply(conn, types.ReplyAddrNotSupported, nil)
+		default:
+			repErr = SendReply(conn, types.ReplyGeneralFailure, nil)
+		}
+
+		if repErr != nil {
+			log.Error(repErr, "failed to send SOCKS reply")
+		}
+
+		log.Error(err, "failed to parse SOCKS request")
 		return
 	}
 
+	// handling SOCKS request
 	reqCtx := contexts.WithAuth(ctx, authCtx)
-	if err := req.Handle(reqCtx); err != nil {
+	if err := req.Handle(reqCtx, conn); err != nil {
 		log.Error(err, "failed to handle SOCKS request", "phase", "request handling")
 		return
 	}
 
-	log.Info("handling SOCKS request completed", "phase", "completion")
+	log.Info("handling SOCKS request completed", "remote", req.GetAddress().String(), "phase", "completion")
 }

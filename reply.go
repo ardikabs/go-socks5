@@ -1,12 +1,12 @@
 package socks5
 
 import (
-	"net"
+	"io"
 
 	"github.com/ardikabs/socks5/pkg/types"
 )
 
-func SendReply(conn net.Conn, replyCode types.ReplyCode, addr *types.Address) error {
+func SendReply(w io.Writer, replyCode types.ReplyCode, addr *types.Address) error {
 	if addr == nil {
 		addr = types.NilAddress
 	}
@@ -18,6 +18,6 @@ func SendReply(conn net.Conn, replyCode types.ReplyCode, addr *types.Address) er
 	msg[1] = uint8(replyCode)
 	msg[2] = 0
 	copy(msg[3:], addrBytes)
-	_, err := conn.Write(msg)
+	_, err := w.Write(msg)
 	return err
 }

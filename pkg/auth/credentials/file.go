@@ -8,7 +8,7 @@ import (
 )
 
 type FileStore struct {
-	stash map[string]string
+	mem MemoryStore
 }
 
 func NewFileStore(filename string) (*FileStore, error) {
@@ -35,13 +35,9 @@ func NewFileStore(filename string) (*FileStore, error) {
 		return nil, fmt.Errorf("no credentials found or credential has invalid format (valid format 'username:password') in %s", filename)
 	}
 
-	return &FileStore{stash: stash}, nil
+	return &FileStore{stash}, nil
 }
 
 func (f *FileStore) Validate(p Parameters) error {
-	if passwd, ok := f.stash[p.Username]; ok && passwd != p.Password {
-		return ErrInvalidCredentials
-	}
-
-	return fmt.Errorf("username %s not found", p.Username)
+	return f.mem.Validate(p)
 }

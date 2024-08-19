@@ -1,6 +1,7 @@
 package socks5
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ardikabs/socks5/pkg/types"
@@ -8,18 +9,17 @@ import (
 )
 
 func TestSendReply(t *testing.T) {
-	fakeConn := &fakeConn{
-		assertOnWrite: func(p []byte) {
-			require.Equal(t, []byte{
-				0x05,                   // SOCKS 5 Version
-				0x00,                   // Reply Succeded
-				0x00,                   // RSV
-				0x01,                   // IPv4 Address Type
-				0x00, 0x00, 0x00, 0x00, // IPv4 zero address
-				0x00, 0x00, // IPv4
-			}, p)
-		},
+	buf := bytes.NewBuffer(nil)
+	require.NoError(t, SendReply(buf, types.ReplySucceeded, nil))
+
+	want := []byte{
+		0x05,                   // SOCKS 5 Version
+		0x00,                   // Reply Succeded
+		0x00,                   // RSV
+		0x01,                   // IPv4 Address Type
+		0x00, 0x00, 0x00, 0x00, // IPv4 zero address
+		0x00, 0x00, // IPv4
 	}
 
-	require.NoError(t, SendReply(fakeConn, types.ReplySucceeded, nil))
+	require.Equal(t, want, buf.Bytes())
 }

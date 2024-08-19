@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 
 	"github.com/ardikabs/socks5/pkg/auth/credentials"
@@ -16,11 +15,7 @@ type notAcceptableAuthenticator struct {
 	unsupportedMethods []byte
 }
 
-func (a *notAcceptableAuthenticator) Authenticate(_ context.Context, conn net.Conn) (*AuthContext, error) {
-	if _, err := conn.Write([]byte{types.VERSION, uint8(types.AuthNoAcceptableMethod)}); err != nil {
-		return nil, err
-	}
-
+func (a *notAcceptableAuthenticator) Authenticate(_ context.Context, req io.Reader, rep io.Writer) (*AuthContext, error) {
 	unsupportedInString := make([]string, 0, len(a.unsupportedMethods))
 	for _, method := range a.unsupportedMethods {
 		unsupportedInString = append(unsupportedInString, types.AuthMethod(method).String())
@@ -31,11 +26,7 @@ func (a *notAcceptableAuthenticator) Authenticate(_ context.Context, conn net.Co
 
 type guestAuthenticator struct{}
 
-func (a *guestAuthenticator) Authenticate(_ context.Context, conn net.Conn) (*AuthContext, error) {
-	if _, err := conn.Write([]byte{types.VERSION, uint8(types.AuthNoAuthRequired)}); err != nil {
-		return nil, err
-	}
-
+func (a *guestAuthenticator) Authenticate(_ context.Context, req io.Reader, rep io.Writer) (*AuthContext, error) {
 	return &AuthContext{Method: types.AuthNoAuthRequired}, nil
 }
 
@@ -45,11 +36,7 @@ type userPassAuthenticator struct {
 	cs credentials.Storer
 }
 
-func (a *userPassAuthenticator) Authenticate(_ context.Context, conn net.Conn) (*AuthContext, error) {
-	if _, err := conn.Write([]byte{types.VERSION, uint8(types.AuthUserPass)}); err != nil {
-		return nil, err
-	}
-
+func (a *userPassAuthenticator) Authenticate(_ context.Context, req io.Reader, rep io.Writer) (*AuthContext, error) {
 	// Reference: https://datatracker.ietf.org/doc/html/rfc1929
 	// USERNAME/PASSWORD Initial Negotiation
 	// +----+------+----------+------+----------+
@@ -59,7 +46,7 @@ func (a *userPassAuthenticator) Authenticate(_ context.Context, conn net.Conn) (
 	// +----+------+----------+------+----------+
 
 	version := []byte{0}
-	if _, err := conn.Read(version); err != nil {
+	if _, err := req.Read(version); err != nil {
 		return nil, fmt.Errorf("failed to read user/pass header: %v", err)
 	}
 
@@ -70,24 +57,24 @@ func (a *userPassAuthenticator) Authenticate(_ context.Context, conn net.Conn) (
 	length := []byte{0}
 
 	// Read username length
-	if _, err := conn.Read(length); err != nil {
+	if _, err := req.Read(length); err != nil {
 		return nil, fmt.Errorf("failed to read username length: %v", err)
 	}
 
 	unameLength := int(length[0])
 	uname := make([]byte, unameLength)
-	if _, err := io.ReadAtLeast(conn, uname, unameLength); err != nil {
+	if _, err := io.ReadAtLeast(req, uname, unameLength); err != nil {
 		return nil, fmt.Errorf("failed to read username: %v", err)
 	}
 
 	// Read password length
-	if _, err := conn.Read(length); err != nil {
+	if _, err := req.Read(length); err != nil {
 		return nil, fmt.Errorf("failed to read password length: %v", err)
 	}
 
 	passwdLength := int(length[0])
 	passwd := make([]byte, passwdLength)
-	if _, err := io.ReadAtLeast(conn, passwd, passwdLength); err != nil {
+	if _, err := io.ReadAtLeast(req, passwd, passwdLength); err != nil {
 		return nil, fmt.Errorf("failed to read password: %v", err)
 	}
 
@@ -108,7 +95,7 @@ func (a *userPassAuthenticator) Authenticate(_ context.Context, conn net.Conn) (
 	}); err != nil {
 		if errors.Is(err, credentials.ErrInvalidCredentials) {
 			// Send failure reply to indicate that the credentials are invalid
-			if _, err := conn.Write([]byte{userPassAuthVersion, 0x01}); err != nil {
+			if _, err := rep.Write([]byte{userPassAuthVersion, 0x01}); err != nil {
 				return nil, fmt.Errorf("failed to send auth reply: %v", err)
 			}
 		}
@@ -117,7 +104,7 @@ func (a *userPassAuthenticator) Authenticate(_ context.Context, conn net.Conn) (
 	}
 
 	// Send success reply to indicate that the credentials are valid
-	if _, err := conn.Write([]byte{userPassAuthVersion, 0x00}); err != nil {
+	if _, err := rep.Write([]byte{userPassAuthVersion, 0x00}); err != nil {
 		return nil, fmt.Errorf("failed to send auth reply: %v", err)
 	}
 

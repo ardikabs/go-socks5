@@ -6,7 +6,7 @@ import (
 	"github.com/ardikabs/socks5/pkg/types"
 )
 
-func authFactory(enabledMethods []types.AuthMethod, offeredMethods []byte, cs credentials.Storer) Authenticator {
+func factory(enabledMethods []types.AuthMethod, offeredMethods []byte, cs credentials.Storer) (types.AuthMethod, Authenticator) {
 	for _, e := range enabledMethods {
 		if !slice.In(byte(e), offeredMethods) {
 			continue
@@ -14,11 +14,11 @@ func authFactory(enabledMethods []types.AuthMethod, offeredMethods []byte, cs cr
 
 		switch e {
 		case types.AuthNoAuthRequired:
-			return &guestAuthenticator{}
+			return e, &guestAuthenticator{}
 		case types.AuthUserPass:
-			return &userPassAuthenticator{cs: cs}
+			return e, &userPassAuthenticator{cs: cs}
 		}
 	}
 
-	return &notAcceptableAuthenticator{offeredMethods}
+	return types.AuthNoAcceptableMethod, &notAcceptableAuthenticator{offeredMethods}
 }

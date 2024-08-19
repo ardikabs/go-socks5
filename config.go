@@ -15,13 +15,8 @@ type ServerConfig struct {
 	EnabledAuthMethods []types.AuthMethod
 
 	// CredentialStore is a store for the server to validate the client's credentials.
+	// This field is optional, but once set, it will ignore UserPassMaps and UserPassFilename.
 	CredentialStore credentials.Storer
-
-	// Logger is a logger for the server to log messages.
-	Logger logr.Logger
-
-	// Dialer is a custom dialer for the server to establish connection to the target host.
-	Dialer request.Dialer
 
 	// UserPassMaps is a map of username and password, used for USERNAME/PASSWORD auth method.
 	// Mutual exclusive with UserPassFilename, UserPassFilename will take precedence if both are set.
@@ -30,4 +25,10 @@ type ServerConfig struct {
 	// UserPassFilename is a filename that contains the username and password, used for USERNAME/PASSWORD auth method.
 	// Mutual exclusive with UserPassMaps, UserPassFilename will take precedence if both are set.
 	UserPassFilename string
+
+	// Dialer is a custom dialer for the server to establish connection to the target host.
+	Dialer request.Dialer
+
+	// Logger is a logger for the server to log messages.
+	Logger logr.Logger
 }

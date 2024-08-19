@@ -69,7 +69,7 @@ func NewAddress(r io.Reader) (*Address, error) {
 	return address, nil
 }
 
-func (a *Address) Bytes() []byte {
+func (a Address) Bytes() []byte {
 	var (
 		atype uint8
 		addr  []byte
@@ -97,7 +97,7 @@ func (a *Address) Bytes() []byte {
 	return bytes
 }
 
-func (a *Address) String() string {
+func (a Address) String() string {
 	if a.DomainName != "" {
 		return fmt.Sprintf("%s:%d (%s)", a.DomainName, a.Port, a.IP)
 	}
@@ -105,7 +105,7 @@ func (a *Address) String() string {
 	return fmt.Sprintf("%s:%d", a.IP, a.Port)
 }
 
-func (a *Address) Address() string {
+func (a Address) Address() string {
 	if a.IP != nil {
 		return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
 	}

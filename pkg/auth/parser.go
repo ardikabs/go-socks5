@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 
 	"github.com/ardikabs/socks5/pkg/auth/credentials"
 	"github.com/ardikabs/socks5/pkg/types"
@@ -22,38 +21,26 @@ type AuthContext struct {
 }
 
 type Authenticator interface {
-	Authenticate(context.Context, net.Conn) (*AuthContext, error)
+	Authenticate(ctx context.Context, req io.Reader, rep io.Writer) (*AuthContext, error)
 }
 
-type Handler struct {
-	conn  net.Conn
-	authn Authenticator
-}
-
-func New(conn net.Conn, enabledAuthMethods []types.AuthMethod, cs credentials.Storer) (*Handler, error) {
+func Parse(rw io.ReadWriter, enabledAuthMethods []types.AuthMethod, cs credentials.Storer) (Authenticator, error) {
 	nMethods := []byte{0}
 
-	if _, err := conn.Read(nMethods); err != nil {
+	if _, err := rw.Read(nMethods); err != nil {
 		return nil, fmt.Errorf("failed to fetch SOCKS auth method options: %v", err)
 	}
 
 	numberMethods := int(nMethods[0])
 	offeredMethods := make([]byte, numberMethods)
-	if _, err := io.ReadAtLeast(conn, offeredMethods, numberMethods); err != nil {
+	if _, err := io.ReadAtLeast(rw, offeredMethods, numberMethods); err != nil {
 		return nil, fmt.Errorf("failed to fetch SOCKS auth methods: %v", err)
 	}
 
-	return &Handler{
-		conn:  conn,
-		authn: authFactory(enabledAuthMethods, offeredMethods, cs),
-	}, nil
-}
-
-func (h *Handler) Handle(ctx context.Context) (*AuthContext, error) {
-	authCtx, err := h.authn.Authenticate(ctx, h.conn)
-	if err != nil {
+	chosen, authn := factory(enabledAuthMethods, offeredMethods, cs)
+	if _, err := rw.Write([]byte{types.VERSION, byte(chosen)}); err != nil {
 		return nil, err
 	}
 
-	return authCtx, nil
+	return authn, nil
 }
